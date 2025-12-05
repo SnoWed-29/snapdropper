@@ -1,0 +1,28 @@
+{
+  "manifest_version": 3,
+  "name": "SnapDropper",
+  "version": "0.0.1",
+  "description": "Capture, save and drag screenshots anywhere",
+  "action": {
+    "default_popup": "index.html",
+    "default_title": "SnapDropper"
+  },
+  "background": {
+    "service_worker": "src/background/background.js"
+  },
+  "permissions": [
+    "tabs",
+    "activeTab",
+    "storage",
+    "scripting"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["src/content/content.js"]
+    }
+  ]
+}
