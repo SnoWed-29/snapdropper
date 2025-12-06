@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
-import { saveScreenshot, getScreenshots, deleteScreenshot } from "../storage/db.js";
+import { saveScreenshot, getScreenshots, deleteScreenshot, getSettings } from "../storage/db.js";
 import Gallery from "./Gallery.jsx";
+import Settings from "./Settings.jsx";
 
 /**
  * Convert a Data URL to a Blob
@@ -95,8 +96,15 @@ const ImageIcon = () => (
   </svg>
 );
 
+const SettingsIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="3"/>
+    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+  </svg>
+);
+
 export default function Popup() {
-  const [currentView, setCurrentView] = useState('main'); // 'main' or 'gallery'
+  const [currentView, setCurrentView] = useState('main'); // 'main', 'gallery', or 'settings'
   const [isCapturing, setIsCapturing] = useState(false);
   const [captureType, setCaptureType] = useState(null);
   const [screenshots, setScreenshots] = useState([]);
@@ -186,23 +194,29 @@ export default function Popup() {
       // Save to storage
       await saveScreenshot(screenshotData);
 
-      // Automatically copy to clipboard
-      try {
-        const blob = dataURLtoBlob(screenshotData.imageData);
-        await navigator.clipboard.write([
-          new ClipboardItem({
-            'image/png': blob
-          })
-        ]);
-        console.log('[POPUP] Screenshot automatically copied to clipboard');
-      } catch (clipboardError) {
-        console.warn('[POPUP] Failed to auto-copy to clipboard:', clipboardError);
+      // Check settings for auto-clipboard
+      const settings = await getSettings();
+      if (settings.autoClipboard) {
+        try {
+          const blob = dataURLtoBlob(screenshotData.imageData);
+          await navigator.clipboard.write([
+            new ClipboardItem({
+              'image/png': blob
+            })
+          ]);
+          console.log('[POPUP] Screenshot automatically copied to clipboard');
+        } catch (clipboardError) {
+          console.warn('[POPUP] Failed to auto-copy to clipboard:', clipboardError);
+        }
       }
 
       // Reload screenshots list
       await loadScreenshots();
 
-      setSuccess(`Screenshot captured and copied!`);
+      const successMessage = settings.autoClipboard 
+        ? 'Screenshot captured and copied!' 
+        : 'Screenshot captured!';
+      setSuccess(successMessage);
       setTimeout(() => setSuccess(null), 3000);
 
     } catch (error) {
@@ -439,6 +453,11 @@ export default function Popup() {
     return <Gallery onBack={() => setCurrentView('main')} />;
   }
 
+  // Render settings if in settings view
+  if (currentView === 'settings') {
+    return <Settings onBack={() => setCurrentView('main')} />;
+  }
+
   return (
     <div
       className="animate-fade-in"
@@ -452,25 +471,46 @@ export default function Popup() {
     >
       {/* Header */}
       <div style={{ marginBottom: '16px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '2px' }}>
-          <h1 style={{
-            fontSize: '18px',
-            fontWeight: '700',
-            color: 'var(--color-dark)',
-            margin: 0
-          }}>
-            SnapDropper
-          </h1>
-          <span style={{
-            fontSize: '10px',
-            fontWeight: '500',
-            color: 'var(--color-gray-400)',
-            backgroundColor: 'var(--color-cream)',
-            padding: '2px 6px',
-            borderRadius: '4px'
-          }}>
-            v0.0.1
-          </span>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '2px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <h1 style={{
+              fontSize: '18px',
+              fontWeight: '700',
+              color: 'var(--color-dark)',
+              margin: 0
+            }}>
+              SnapDropper
+            </h1>
+            <span style={{
+              fontSize: '10px',
+              fontWeight: '500',
+              color: 'var(--color-gray-400)',
+              backgroundColor: 'var(--color-cream)',
+              padding: '2px 6px',
+              borderRadius: '4px'
+            }}>
+              v0.0.1
+            </span>
+          </div>
+          <button
+            onClick={() => setCurrentView('settings')}
+            className="icon-btn"
+            style={{
+              padding: '8px',
+              color: 'var(--color-gray-600)',
+              backgroundColor: 'transparent',
+              border: 'none',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              transition: 'all 150ms ease'
+            }}
+            title="Settings"
+          >
+            <SettingsIcon />
+          </button>
         </div>
         <p style={{
           fontSize: '13px',

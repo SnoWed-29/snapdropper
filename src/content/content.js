@@ -19,6 +19,64 @@ const MESSAGE_TYPES = {
 };
 
 const STORAGE_KEY = 'screenshots';
+const SETTINGS_KEY = 'settings';
+
+// Default settings (must match db.js)
+const DEFAULT_SETTINGS = {
+  autoClipboard: true,
+  autoSave: false,
+  saveLocation: '',
+  maxImages: 50
+};
+
+/**
+ * Get settings from storage
+ */
+async function getSettings() {
+  try {
+    const result = await chrome.storage.local.get(SETTINGS_KEY);
+    return { ...DEFAULT_SETTINGS, ...result[SETTINGS_KEY] };
+  } catch (error) {
+    console.error('[CONTENT] Error getting settings:', error);
+    return DEFAULT_SETTINGS;
+  }
+}
+
+/**
+ * Convert a Data URL to a Blob
+ */
+function dataURLtoBlob(dataURL) {
+  const parts = dataURL.split(',');
+  const mime = parts[0].match(/:(.*?);/)[1];
+  const byteString = atob(parts[1]);
+  const arrayBuffer = new ArrayBuffer(byteString.length);
+  const uint8Array = new Uint8Array(arrayBuffer);
+
+  for (let i = 0; i < byteString.length; i++) {
+    uint8Array[i] = byteString.charCodeAt(i);
+  }
+
+  return new Blob([uint8Array], { type: mime });
+}
+
+/**
+ * Copy image to clipboard
+ */
+async function copyToClipboard(imageData) {
+  try {
+    const blob = dataURLtoBlob(imageData);
+    await navigator.clipboard.write([
+      new ClipboardItem({
+        'image/png': blob
+      })
+    ]);
+    console.log('[CONTENT] Screenshot copied to clipboard');
+    return true;
+  } catch (error) {
+    console.error('[CONTENT] Failed to copy to clipboard:', error);
+    return false;
+  }
+}
 
 // Design system colors
 const COLORS = {
@@ -37,9 +95,10 @@ const COLORS = {
  */
 async function saveScreenshot(screenshotData) {
   try {
-    // Get existing screenshots
-    const result = await chrome.storage.local.get(STORAGE_KEY);
+    // Get existing screenshots and settings
+    const result = await chrome.storage.local.get([STORAGE_KEY, SETTINGS_KEY]);
     const screenshots = result[STORAGE_KEY] || [];
+    const settings = { ...DEFAULT_SETTINGS, ...result[SETTINGS_KEY] };
 
     // Create screenshot object with unique id
     const screenshot = {
@@ -55,14 +114,14 @@ async function saveScreenshot(screenshotData) {
     // Add new screenshot at the beginning
     screenshots.unshift(screenshot);
 
-    // Keep only the last 50 screenshots
-    const trimmed = screenshots.slice(0, 50);
+    // Keep only the specified number of screenshots based on settings
+    const trimmed = screenshots.slice(0, settings.maxImages);
 
     // Save back to storage
     await chrome.storage.local.set({ [STORAGE_KEY]: trimmed });
 
     console.log('[CONTENT] Screenshot saved to chrome.storage, id:', screenshot.id);
-    return screenshot.id;
+    return { id: screenshot.id, imageData: screenshotData.imageData };
   } catch (error) {
     console.error('[CONTENT] Error saving screenshot:', error);
     throw error;
@@ -348,11 +407,20 @@ class SnippingTool {
         if (response && response.success && response.data) {
           console.log('[CONTENT] Capture successful, saving to storage...');
 
-          // Save to storage
+          // Save to storage and handle auto-clipboard
           saveScreenshot(response.data)
-            .then(() => {
+            .then(async (result) => {
               console.log('[CONTENT] Screenshot saved successfully');
-              self.showSuccessToast();
+
+              // Check settings for auto-clipboard
+              const settings = await getSettings();
+              let copiedToClipboard = false;
+
+              if (settings.autoClipboard) {
+                copiedToClipboard = await copyToClipboard(result.imageData);
+              }
+
+              self.showSuccessToast(copiedToClipboard);
               self.cleanup();
             })
             .catch((err) => {
@@ -376,7 +444,7 @@ class SnippingTool {
     }
   }
 
-  showSuccessToast() {
+  showSuccessToast(copiedToClipboard = false) {
     const toast = document.createElement('div');
     toast.style.cssText = `
       position: fixed;
@@ -406,7 +474,7 @@ class SnippingTool {
     `;
 
     const text = document.createElement('span');
-    text.textContent = 'Screenshot saved!';
+    text.textContent = copiedToClipboard ? 'Screenshot saved & copied!' : 'Screenshot saved!';
 
     toast.appendChild(icon);
     toast.appendChild(text);

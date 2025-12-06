@@ -67,6 +67,15 @@ async function handleCaptureVisible(sendResponse) {
 
     console.log('[BACKGROUND] Capture complete, size:', dataUrl.length);
 
+    // Handle auto-save
+    await handleAutoSave({
+      imageData: dataUrl,
+      url: tab.url,
+      title: tab.title,
+      type: 'visible',
+      timestamp: Date.now()
+    });
+
     // Send back the result
     sendResponse({
       success: true,
@@ -127,6 +136,15 @@ async function handleCaptureSelection(selectionData, sendResponse) {
     const croppedData = await cropImage(dataUrl, selectionData.selection);
     console.log('[BACKGROUND] Cropped image, returning to content script...');
 
+    // Check settings for auto-save
+    await handleAutoSave({
+      imageData: croppedData,
+      url: tab.url,
+      title: tab.title,
+      type: 'selection',
+      timestamp: Date.now()
+    });
+
     // Return screenshot data to content script for saving
     sendResponse({
       success: true,
@@ -147,6 +165,62 @@ async function handleCaptureSelection(selectionData, sendResponse) {
   } catch (error) {
     console.error('[BACKGROUND] Selection capture error:', error);
     sendResponse({ success: false, error: error.message });
+  }
+}
+
+/**
+ * Get settings from storage
+ */
+async function getSettings() {
+  try {
+    const result = await chrome.storage.local.get('settings');
+    return {
+      autoClipboard: true,
+      autoSave: false,
+      saveLocation: '',
+      maxImages: 50,
+      ...result.settings
+    };
+  } catch (error) {
+    console.error('[BACKGROUND] Error getting settings:', error);
+    return {
+      autoClipboard: true,
+      autoSave: false,
+      saveLocation: '',
+      maxImages: 50
+    };
+  }
+}
+
+/**
+ * Handle auto-save functionality
+ */
+async function handleAutoSave(screenshotData) {
+  try {
+    const settings = await getSettings();
+    
+    if (settings.autoSave) {
+      console.log('[BACKGROUND] Auto-save enabled, downloading screenshot...');
+      
+      // Generate filename
+      const timestamp = new Date(screenshotData.timestamp).toISOString().replace(/[:.]/g, '-');
+      const filename = `snapdropper-${screenshotData.type}-${timestamp}.png`;
+      
+      // Use chrome.downloads API to save to PC
+      chrome.downloads.download({
+        url: screenshotData.imageData,
+        filename: filename,
+        saveAs: false // Save directly without prompt
+      }, (downloadId) => {
+        if (chrome.runtime.lastError) {
+          console.error('[BACKGROUND] Auto-save failed:', chrome.runtime.lastError);
+        } else {
+          console.log('[BACKGROUND] Auto-save successful, download ID:', downloadId);
+        }
+      });
+    }
+  } catch (error) {
+    console.error('[BACKGROUND] Auto-save error:', error);
   }
 }
 
