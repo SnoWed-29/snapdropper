@@ -1,9 +1,5 @@
-/**
- * SnapDropper Background Service Worker
- * Handles screenshot capture using Chrome Extension APIs
- */
-
-console.log("[BACKGROUND] SnapDropper service worker loaded");
+// Background service worker for screenshot capture
+console.log('[BACKGROUND] Service worker loaded');
 
 // Message types for communication
 const MESSAGE_TYPES = {
@@ -44,9 +40,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   return false;
 });
 
-/**
- * Handle visible area capture
- */
+// Capture visible area of active tab
 async function handleCaptureVisible(sendResponse) {
   try {
     console.log('[BACKGROUND] Capturing visible area...');
@@ -66,6 +60,15 @@ async function handleCaptureVisible(sendResponse) {
     });
 
     console.log('[BACKGROUND] Capture complete, size:', dataUrl.length);
+
+    // Handle auto-save
+    await handleAutoSave({
+      imageData: dataUrl,
+      url: tab.url,
+      title: tab.title,
+      type: 'visible',
+      timestamp: Date.now()
+    });
 
     // Send back the result
     sendResponse({
@@ -90,9 +93,7 @@ async function handleCaptureVisible(sendResponse) {
   }
 }
 
-/**
- * Handle selection mode initialization
- */
+// Initialize selection mode on content script
 async function handleInitSelection(sendResponse) {
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -111,9 +112,7 @@ async function handleInitSelection(sendResponse) {
   }
 }
 
-/**
- * Handle selection capture - captures and crops, returns data to content script for saving
- */
+// Capture and crop selection area
 async function handleCaptureSelection(selectionData, sendResponse) {
   try {
     console.log('[BACKGROUND] Capturing selection:', selectionData.selection);
@@ -126,6 +125,15 @@ async function handleCaptureSelection(selectionData, sendResponse) {
     // Crop to selection using OffscreenCanvas
     const croppedData = await cropImage(dataUrl, selectionData.selection);
     console.log('[BACKGROUND] Cropped image, returning to content script...');
+
+    // Check settings for auto-save
+    await handleAutoSave({
+      imageData: croppedData,
+      url: tab.url,
+      title: tab.title,
+      type: 'selection',
+      timestamp: Date.now()
+    });
 
     // Return screenshot data to content script for saving
     sendResponse({
@@ -150,9 +158,59 @@ async function handleCaptureSelection(selectionData, sendResponse) {
   }
 }
 
-/**
- * Crop image to selection
- */
+// Get user settings from storage
+async function getSettings() {
+  try {
+    const result = await chrome.storage.local.get('settings');
+    return {
+      autoClipboard: true,
+      autoSave: false,
+      saveLocation: '',
+      maxImages: 50,
+      ...result.settings
+    };
+  } catch (error) {
+    console.error('[BACKGROUND] Error getting settings:', error);
+    return {
+      autoClipboard: true,
+      autoSave: false,
+      saveLocation: '',
+      maxImages: 50
+    };
+  }
+}
+
+// Handle auto-save feature
+async function handleAutoSave(screenshotData) {
+  try {
+    const settings = await getSettings();
+    
+    if (settings.autoSave) {
+      console.log('[BACKGROUND] Auto-save enabled, downloading screenshot...');
+      
+      // Generate filename
+      const timestamp = new Date(screenshotData.timestamp).toISOString().replace(/[:.]/g, '-');
+      const filename = `snapdropper-${screenshotData.type}-${timestamp}.png`;
+      
+      // Use chrome.downloads API to save to PC
+      chrome.downloads.download({
+        url: screenshotData.imageData,
+        filename: filename,
+        saveAs: false // Save directly without prompt
+      }, (downloadId) => {
+        if (chrome.runtime.lastError) {
+          console.error('[BACKGROUND] Auto-save failed:', chrome.runtime.lastError);
+        } else {
+          console.log('[BACKGROUND] Auto-save successful, download ID:', downloadId);
+        }
+      });
+    }
+  } catch (error) {
+    console.error('[BACKGROUND] Auto-save error:', error);
+  }
+}
+
+// Crop image using OffscreenCanvas
 async function cropImage(dataUrl, selection) {
   const canvas = new OffscreenCanvas(selection.width, selection.height);
   const ctx = canvas.getContext('2d');

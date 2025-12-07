@@ -1,8 +1,3 @@
-/**
- * SnapDropper Content Script
- * Selection capture like Windows Snipping Tool
- */
-
 console.log("[CONTENT] SnapDropper loaded");
 
 const MESSAGE_TYPES = {
@@ -13,15 +8,78 @@ const MESSAGE_TYPES = {
 };
 
 const STORAGE_KEY = 'screenshots';
+const SETTINGS_KEY = 'settings';
 
-/**
- * Save screenshot using chrome.storage.local (shared across extension)
- */
+// Default settings (must match db.js)
+const DEFAULT_SETTINGS = {
+  autoClipboard: true,
+  autoSave: false,
+  saveLocation: '',
+  maxImages: 50
+};
+
+// Get settings from chrome storage
+async function getSettings() {
+  try {
+    const result = await chrome.storage.local.get(SETTINGS_KEY);
+    return { ...DEFAULT_SETTINGS, ...result[SETTINGS_KEY] };
+  } catch (error) {
+    console.error('[CONTENT] Error getting settings:', error);
+    return DEFAULT_SETTINGS;
+  }
+}
+
+// Convert base64 data URL to Blob
+function dataURLtoBlob(dataURL) {
+  const parts = dataURL.split(',');
+  const mime = parts[0].match(/:(.*?);/)[1];
+  const byteString = atob(parts[1]);
+  const arrayBuffer = new ArrayBuffer(byteString.length);
+  const uint8Array = new Uint8Array(arrayBuffer);
+
+  for (let i = 0; i < byteString.length; i++) {
+    uint8Array[i] = byteString.charCodeAt(i);
+  }
+
+  return new Blob([uint8Array], { type: mime });
+}
+
+// Copy image to clipboard
+async function copyToClipboard(imageData) {
+  try {
+    const blob = dataURLtoBlob(imageData);
+    await navigator.clipboard.write([
+      new ClipboardItem({
+        'image/png': blob
+      })
+    ]);
+    console.log('[CONTENT] Screenshot copied to clipboard');
+    return true;
+  } catch (error) {
+    console.error('[CONTENT] Failed to copy to clipboard:', error);
+    return false;
+  }
+}
+
+// Design system colors
+const COLORS = {
+  orange: '#FF6D1F',
+  orangeLight: '#FF8A47',
+  orangeDark: '#E55A0D',
+  cream: '#F5E7C6',
+  creamLight: '#FAF3E1',
+  dark: '#222222',
+  success: '#10b981',
+  error: '#ef4444'
+};
+
+// Save screenshot to chrome.storage.local
 async function saveScreenshot(screenshotData) {
   try {
-    // Get existing screenshots
-    const result = await chrome.storage.local.get(STORAGE_KEY);
+    // Get existing screenshots and settings
+    const result = await chrome.storage.local.get([STORAGE_KEY, SETTINGS_KEY]);
     const screenshots = result[STORAGE_KEY] || [];
+    const settings = { ...DEFAULT_SETTINGS, ...result[SETTINGS_KEY] };
 
     // Create screenshot object with unique id
     const screenshot = {
@@ -37,23 +95,20 @@ async function saveScreenshot(screenshotData) {
     // Add new screenshot at the beginning
     screenshots.unshift(screenshot);
 
-    // Keep only the last 50 screenshots
-    const trimmed = screenshots.slice(0, 50);
+    // Keep only the specified number of screenshots based on settings
+    const trimmed = screenshots.slice(0, settings.maxImages);
 
     // Save back to storage
     await chrome.storage.local.set({ [STORAGE_KEY]: trimmed });
 
     console.log('[CONTENT] Screenshot saved to chrome.storage, id:', screenshot.id);
-    return screenshot.id;
+    return { id: screenshot.id, imageData: screenshotData.imageData };
   } catch (error) {
     console.error('[CONTENT] Error saving screenshot:', error);
     throw error;
   }
 }
 
-/**
- * Selection overlay - Windows Snipping Tool style
- */
 class SnippingTool {
   constructor() {
     this.overlay = null;
@@ -77,8 +132,8 @@ class SnippingTool {
     this.addListeners();
   }
 
+  // Create fullscreen overlay for selection
   createOverlay() {
-    // Create full-screen overlay
     this.overlay = document.createElement('div');
     this.overlay.id = 'snapdropper-snip';
     this.overlay.style.cssText = `
@@ -91,7 +146,6 @@ class SnippingTool {
       cursor: crosshair;
     `;
 
-    // Create canvas for drawing selection
     this.canvas = document.createElement('canvas');
     this.canvas.width = window.innerWidth;
     this.canvas.height = window.innerHeight;
@@ -106,7 +160,6 @@ class SnippingTool {
     this.ctx = this.canvas.getContext('2d');
     this.drawDimmedScreen();
 
-    // Instructions tooltip
     const tooltip = document.createElement('div');
     tooltip.id = 'snapdropper-tooltip';
     tooltip.style.cssText = `
@@ -114,28 +167,79 @@ class SnippingTool {
       top: 50%;
       left: 50%;
       transform: translate(-50%, -50%);
-      background: rgba(0, 0, 0, 0.85);
-      color: white;
-      padding: 12px 24px;
-      border-radius: 8px;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: ${COLORS.dark};
+      color: ${COLORS.creamLight};
+      padding: 16px 28px;
+      border-radius: 14px;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       font-size: 14px;
+      font-weight: 500;
       pointer-events: none;
       z-index: 2147483648;
+      box-shadow: 0 8px 32px rgba(34, 34, 34, 0.3);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      animation: snapdropper-fadeIn 200ms ease-out;
     `;
-    tooltip.textContent = 'Click and drag to select area • ESC to cancel';
+
+    // Add icon
+    const iconContainer = document.createElement('div');
+    iconContainer.innerHTML = `
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="${COLORS.orange}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M5 3h4M15 3h4M3 5v4M21 5v4M3 15v4M21 15v4M5 21h4M15 21h4"/>
+      </svg>
+    `;
+    iconContainer.style.marginBottom = '4px';
+
+    const mainText = document.createElement('div');
+    mainText.textContent = 'Click and drag to select area';
+    mainText.style.cssText = `
+      font-size: 15px;
+      font-weight: 600;
+      color: ${COLORS.creamLight};
+    `;
+
+    const subText = document.createElement('div');
+    subText.textContent = 'Press ESC to cancel';
+    subText.style.cssText = `
+      font-size: 12px;
+      color: ${COLORS.cream};
+      opacity: 0.7;
+    `;
+
+    tooltip.appendChild(iconContainer);
+    tooltip.appendChild(mainText);
+    tooltip.appendChild(subText);
+
+    // Add animation keyframes
+    const style = document.createElement('style');
+    style.textContent = `
+      @keyframes snapdropper-fadeIn {
+        from { opacity: 0; transform: translate(-50%, -50%) scale(0.95); }
+        to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+      }
+      @keyframes snapdropper-slideUp {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+    `;
+    this.overlay.appendChild(style);
 
     this.overlay.appendChild(this.canvas);
     this.overlay.appendChild(tooltip);
     document.body.appendChild(this.overlay);
   }
 
+  // Draw semi-transparent dark overlay
   drawDimmedScreen() {
     // Fill with semi-transparent dark overlay
-    this.ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+    this.ctx.fillStyle = 'rgba(34, 34, 34, 0.5)';
     this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
   }
 
+  // Draw selection rectangle with handles
   drawSelection() {
     const x = Math.min(this.startX, this.endX);
     const y = Math.min(this.startY, this.endY);
@@ -149,34 +253,54 @@ class SnippingTool {
     // Cut out the selection area (make it clear)
     this.ctx.clearRect(x, y, w, h);
 
-    // Draw selection border
-    this.ctx.strokeStyle = '#0078d4';
+    // Draw selection border with orange accent
+    this.ctx.strokeStyle = COLORS.orange;
     this.ctx.lineWidth = 2;
     this.ctx.strokeRect(x, y, w, h);
 
-    // Draw corner handles
-    const handleSize = 8;
-    this.ctx.fillStyle = '#0078d4';
-    // Top-left
-    this.ctx.fillRect(x - handleSize/2, y - handleSize/2, handleSize, handleSize);
-    // Top-right
-    this.ctx.fillRect(x + w - handleSize/2, y - handleSize/2, handleSize, handleSize);
-    // Bottom-left
-    this.ctx.fillRect(x - handleSize/2, y + h - handleSize/2, handleSize, handleSize);
-    // Bottom-right
-    this.ctx.fillRect(x + w - handleSize/2, y + h - handleSize/2, handleSize, handleSize);
+    // Draw corner handles with orange color
+    const handleSize = 10;
+    this.ctx.fillStyle = COLORS.orange;
 
-    // Draw dimensions tooltip
-    if (w > 50 && h > 20) {
+    // Round corner handles
+    const drawHandle = (hx, hy) => {
+      this.ctx.beginPath();
+      this.ctx.arc(hx, hy, handleSize / 2, 0, Math.PI * 2);
+      this.ctx.fill();
+    };
+
+    // Top-left
+    drawHandle(x, y);
+    // Top-right
+    drawHandle(x + w, y);
+    // Bottom-left
+    drawHandle(x, y + h);
+    // Bottom-right
+    drawHandle(x + w, y + h);
+
+    // Draw dimensions tooltip with modern styling
+    if (w > 60 && h > 30) {
       const dimText = `${w} × ${h}`;
-      this.ctx.font = '12px -apple-system, BlinkMacSystemFont, sans-serif';
-      this.ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+      this.ctx.font = '600 13px Inter, -apple-system, BlinkMacSystemFont, sans-serif';
       const textWidth = this.ctx.measureText(dimText).width;
-      this.ctx.fillRect(x + w/2 - textWidth/2 - 8, y + h/2 - 10, textWidth + 16, 20);
-      this.ctx.fillStyle = 'white';
+      const padding = 10;
+      const tooltipWidth = textWidth + padding * 2;
+      const tooltipHeight = 28;
+      const tooltipX = x + w / 2 - tooltipWidth / 2;
+      const tooltipY = y + h / 2 - tooltipHeight / 2;
+
+      // Tooltip background with rounded corners
+      this.ctx.fillStyle = COLORS.dark;
+      this.ctx.beginPath();
+      const radius = 8;
+      this.ctx.roundRect(tooltipX, tooltipY, tooltipWidth, tooltipHeight, radius);
+      this.ctx.fill();
+
+      // Tooltip text
+      this.ctx.fillStyle = COLORS.creamLight;
       this.ctx.textAlign = 'center';
       this.ctx.textBaseline = 'middle';
-      this.ctx.fillText(dimText, x + w/2, y + h/2);
+      this.ctx.fillText(dimText, x + w / 2, y + h / 2);
     }
 
     // Hide the center tooltip when selecting
@@ -184,6 +308,7 @@ class SnippingTool {
     if (tooltip) tooltip.style.display = 'none';
   }
 
+  // Add mouse and keyboard event listeners
   addListeners() {
     this.overlay.addEventListener('mousedown', this.boundMouseDown);
     this.overlay.addEventListener('mousemove', this.boundMouseMove);
@@ -192,6 +317,7 @@ class SnippingTool {
     this.overlay.addEventListener('contextmenu', e => e.preventDefault());
   }
 
+  // Remove all event listeners
   removeListeners() {
     if (this.overlay) {
       this.overlay.removeEventListener('mousedown', this.boundMouseDown);
@@ -201,6 +327,7 @@ class SnippingTool {
     document.removeEventListener('keydown', this.boundKeyDown);
   }
 
+  // Start selection on mouse down
   onMouseDown(e) {
     this.isSelecting = true;
     this.startX = e.clientX;
@@ -209,6 +336,7 @@ class SnippingTool {
     this.endY = e.clientY;
   }
 
+  // Update selection while dragging
   onMouseMove(e) {
     if (!this.isSelecting) return;
     this.endX = e.clientX;
@@ -216,6 +344,7 @@ class SnippingTool {
     this.drawSelection();
   }
 
+  // Finish selection and capture
   onMouseUp(e) {
     if (!this.isSelecting) return;
     this.isSelecting = false;
@@ -259,13 +388,22 @@ class SnippingTool {
         }
 
         if (response && response.success && response.data) {
-          console.log('[CONTENT] Capture successful, saving to IndexedDB...');
+          console.log('[CONTENT] Capture successful, saving to storage...');
 
-          // Save to IndexedDB
+          // Save to storage and handle auto-clipboard
           saveScreenshot(response.data)
-            .then(() => {
+            .then(async (result) => {
               console.log('[CONTENT] Screenshot saved successfully');
-              self.showSuccessToast();
+
+              // Check settings for auto-clipboard
+              const settings = await getSettings();
+              let copiedToClipboard = false;
+
+              if (settings.autoClipboard) {
+                copiedToClipboard = await copyToClipboard(result.imageData);
+              }
+
+              self.showSuccessToast(copiedToClipboard);
               self.cleanup();
             })
             .catch((err) => {
@@ -282,6 +420,7 @@ class SnippingTool {
     }, 100);
   }
 
+  // Handle ESC key to cancel
   onKeyDown(e) {
     if (e.key === 'Escape') {
       console.log('[CONTENT] Selection canceled');
@@ -289,48 +428,133 @@ class SnippingTool {
     }
   }
 
-  showSuccessToast() {
+  // Show success notification
+  showSuccessToast(copiedToClipboard = false) {
     const toast = document.createElement('div');
     toast.style.cssText = `
       position: fixed;
-      bottom: 20px;
-      right: 20px;
-      background: #10b981;
+      bottom: 24px;
+      right: 24px;
+      background: linear-gradient(135deg, ${COLORS.success} 0%, #059669 100%);
       color: white;
-      padding: 12px 20px;
-      border-radius: 8px;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      padding: 14px 20px;
+      border-radius: 12px;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       font-size: 14px;
+      font-weight: 500;
       z-index: 2147483647;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      box-shadow: 0 8px 24px rgba(16, 185, 129, 0.35);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      animation: snapdropper-slideUp 200ms ease-out;
     `;
-    toast.textContent = 'Screenshot saved!';
+
+    // Add checkmark icon
+    const icon = document.createElement('span');
+    icon.innerHTML = `
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="20 6 9 17 4 12"/>
+      </svg>
+    `;
+
+    const text = document.createElement('span');
+    text.textContent = copiedToClipboard ? 'Screenshot saved & copied!' : 'Screenshot saved!';
+
+    toast.appendChild(icon);
+    toast.appendChild(text);
+
+    // Add animation keyframes if not already present
+    if (!document.getElementById('snapdropper-toast-styles')) {
+      const style = document.createElement('style');
+      style.id = 'snapdropper-toast-styles';
+      style.textContent = `
+        @keyframes snapdropper-slideUp {
+          from { opacity: 0; transform: translateY(10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes snapdropper-fadeOut {
+          from { opacity: 1; transform: translateY(0); }
+          to { opacity: 0; transform: translateY(-10px); }
+        }
+      `;
+      document.head.appendChild(style);
+    }
+
     document.body.appendChild(toast);
 
-    setTimeout(() => toast.remove(), 2000);
+    // Animate out and remove
+    setTimeout(() => {
+      toast.style.animation = 'snapdropper-fadeOut 200ms ease-out forwards';
+      setTimeout(() => toast.remove(), 200);
+    }, 2000);
   }
 
+  // Show error notification
   showErrorToast(message) {
     const toast = document.createElement('div');
     toast.style.cssText = `
       position: fixed;
-      bottom: 20px;
-      right: 20px;
-      background: #ef4444;
+      bottom: 24px;
+      right: 24px;
+      background: linear-gradient(135deg, ${COLORS.error} 0%, #dc2626 100%);
       color: white;
-      padding: 12px 20px;
-      border-radius: 8px;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      padding: 14px 20px;
+      border-radius: 12px;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       font-size: 14px;
+      font-weight: 500;
       z-index: 2147483647;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      box-shadow: 0 8px 24px rgba(239, 68, 68, 0.35);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      animation: snapdropper-slideUp 200ms ease-out;
     `;
-    toast.textContent = message;
+
+    // Add error icon
+    const icon = document.createElement('span');
+    icon.innerHTML = `
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="10"/>
+        <line x1="12" y1="8" x2="12" y2="12"/>
+        <line x1="12" y1="16" x2="12.01" y2="16"/>
+      </svg>
+    `;
+
+    const text = document.createElement('span');
+    text.textContent = message;
+
+    toast.appendChild(icon);
+    toast.appendChild(text);
+
+    // Add animation keyframes if not already present
+    if (!document.getElementById('snapdropper-toast-styles')) {
+      const style = document.createElement('style');
+      style.id = 'snapdropper-toast-styles';
+      style.textContent = `
+        @keyframes snapdropper-slideUp {
+          from { opacity: 0; transform: translateY(10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes snapdropper-fadeOut {
+          from { opacity: 1; transform: translateY(0); }
+          to { opacity: 0; transform: translateY(-10px); }
+        }
+      `;
+      document.head.appendChild(style);
+    }
+
     document.body.appendChild(toast);
 
-    setTimeout(() => toast.remove(), 3000);
+    // Animate out and remove
+    setTimeout(() => {
+      toast.style.animation = 'snapdropper-fadeOut 200ms ease-out forwards';
+      setTimeout(() => toast.remove(), 200);
+    }, 3000);
   }
 
+  // Remove overlay and cleanup
   cleanup() {
     this.removeListeners();
     if (this.overlay && this.overlay.parentNode) {

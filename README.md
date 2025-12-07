@@ -1,17 +1,30 @@
 # SnapDropper
 
-A Chrome browser extension for screenshot capture with Windows Snipping Tool-style selection.
+A Chrome browser extension for screenshot capture with Windows Snipping Tool-style selection, featuring a comprehensive gallery and customizable settings.
 
 ## Features
 
+### Screenshot Capture
 - **Capture Visible Area** - Instantly capture the visible portion of any webpage
 - **Selection Capture** - Windows Snipping Tool-style click-and-drag selection
   - Fullscreen overlay with crosshair cursor
-  - Live selection preview with blue border and corner handles
-  - Dimension display (width × height)
-  - ESC to cancel
-- **Screenshot Gallery** - View, download, and manage captured screenshots
-- **Toast Notifications** - Visual feedback on capture success/failure
+  - Live selection preview with dimension display (width × height)
+  - ESC to cancel selection
+  - Success/error toast notifications
+
+### Gallery & Management
+- **Screenshot Gallery** - Browse all captured screenshots with thumbnails
+- **Copy to Clipboard** - One-click copy for easy pasting
+- **Download** - Save screenshots to your local system
+- **Delete Management** - Remove unwanted screenshots
+- **Auto-organize** - Screenshots automatically sorted by capture time
+
+### Settings & Customization
+- **Auto-clipboard** - Automatically copy screenshots to clipboard
+- **Auto-save** - Automatically download screenshots
+- **Storage Management** - Configurable max screenshots limit (default: 50)
+- **Dynamic Storage** - Smart storage capacity calculation
+- **Persistent Settings** - Preferences saved across browser sessions
 
 ## Installation
 
@@ -70,25 +83,34 @@ npm run lint
 
 ```
 src/
-├── popup/Popup.jsx      # Extension popup UI
+├── popup/
+│   ├── Popup.jsx        # Main extension popup UI with navigation
+│   ├── Gallery.jsx      # Screenshot gallery with management features
+│   └── Settings.jsx     # Configuration and preferences
 ├── background/          # Service worker for capture API
 ├── content/             # Selection overlay (SnippingTool class)
-└── storage/db.js        # chrome.storage.local utilities
+├── storage/db.js        # chrome.storage.local utilities & settings
+└── utils/              # Shared utilities and helpers
+public/
+└── manifest.json        # Extension manifest (V3)
 ```
 
 ## Permissions
 
-- `tabs` - Access tab information
-- `activeTab` - Capture active tab
-- `storage` - Store screenshots
-- `scripting` - Inject content scripts
-- `<all_urls>` - Capture any webpage
+- `tabs` - Access tab information for capture
+- `activeTab` - Capture screenshots of active tab
+- `storage` - Store screenshots and settings locally
+- `scripting` - Inject selection overlay content scripts
+- `downloads` - Save screenshots to local file system
+- `<all_urls>` - Capture screenshots on any accessible webpage
 
 ## Limitations
 
-- Cannot capture chrome://, edge://, or about: pages
-- Screenshots stored locally (max 50 to avoid storage limits)
-- Requires page refresh if extension is updated while page is open
+- Cannot capture chrome://, edge://, or about: pages (browser security)
+- Screenshots stored in extension's local storage (configurable limit, default 50)
+- Content script requires page refresh if extension is updated while page is open
+- Selection capture requires user interaction (click and drag)
+- Large screenshots may impact storage quota
 
 ## License
 

@@ -1,5 +1,22 @@
 import React, { useState, useEffect } from "react";
-import { saveScreenshot, getScreenshots, deleteScreenshot } from "../storage/db.js";
+import { saveScreenshot, getScreenshots, deleteScreenshot, getSettings } from "../storage/db.js";
+import Gallery from "./Gallery.jsx";
+import Settings from "./Settings.jsx";
+
+// Convert base64 data URL to Blob
+function dataURLtoBlob(dataURL) {
+  const parts = dataURL.split(',');
+  const mime = parts[0].match(/:(.*?);/)[1];
+  const byteString = atob(parts[1]);
+  const arrayBuffer = new ArrayBuffer(byteString.length);
+  const uint8Array = new Uint8Array(arrayBuffer);
+
+  for (let i = 0; i < byteString.length; i++) {
+    uint8Array[i] = byteString.charCodeAt(i);
+  }
+
+  return new Blob([uint8Array], { type: mime });
+}
 
 // Message types (matching background and content scripts)
 const MESSAGE_TYPES = {
@@ -11,7 +28,79 @@ const MESSAGE_TYPES = {
   CAPTURE_ERROR: 'capture_error'
 };
 
+// SVG Icons as components
+const CameraIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+    <circle cx="12" cy="13" r="4"/>
+  </svg>
+);
+
+const SelectionIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M5 3h4M15 3h4M3 5v4M21 5v4M3 15v4M21 15v4M5 21h4M15 21h4"/>
+  </svg>
+);
+
+const CopyIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+  </svg>
+);
+
+const DownloadIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+    <polyline points="7 10 12 15 17 10"/>
+    <line x1="12" y1="15" x2="12" y2="3"/>
+  </svg>
+);
+
+const TrashIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="3 6 5 6 21 6"/>
+    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+  </svg>
+);
+
+const ChevronRightIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="9 18 15 12 9 6"/>
+  </svg>
+);
+
+const CheckIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="20 6 9 17 4 12"/>
+  </svg>
+);
+
+const AlertIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="10"/>
+    <line x1="12" y1="8" x2="12" y2="12"/>
+    <line x1="12" y1="16" x2="12.01" y2="16"/>
+  </svg>
+);
+
+const ImageIcon = () => (
+  <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" opacity="0.3">
+    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+    <circle cx="8.5" cy="8.5" r="1.5"/>
+    <polyline points="21 15 16 10 5 21"/>
+  </svg>
+);
+
+const SettingsIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="3"/>
+    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+  </svg>
+);
+
 export default function Popup() {
+  const [currentView, setCurrentView] = useState('main'); // 'main', 'gallery', or 'settings'
   const [isCapturing, setIsCapturing] = useState(false);
   const [captureType, setCaptureType] = useState(null);
   const [screenshots, setScreenshots] = useState([]);
@@ -22,7 +111,7 @@ export default function Popup() {
   // Load screenshots on component mount
   useEffect(() => {
     loadScreenshots();
-    
+
     // Test background script connection
     console.log('[POPUP] Testing background script connection...');
     chrome.runtime.sendMessage({ type: 'test_connection' }, (response) => {
@@ -32,18 +121,18 @@ export default function Popup() {
         console.log('[POPUP] Background script connected successfully:', response);
       }
     });
-    
+
     // Listen for messages from background script
     const messageListener = (message, sender, sendResponse) => {
       handleBackgroundMessage(message);
     };
-    
+
     chrome.runtime.onMessage.addListener(messageListener);
-    
+
     // Cleanup listener on unmount
     return () => {
       chrome.runtime.onMessage.removeListener(messageListener);
-      
+
       // Clear timeout if component unmounts
       if (captureTimeout) {
         clearTimeout(captureTimeout);
@@ -51,12 +140,10 @@ export default function Popup() {
     };
   }, []);
 
-  /**
-   * Load screenshots from storage
-   */
+  // Load screenshots from storage (only last 2 for main view)
   const loadScreenshots = async () => {
     try {
-      const savedScreenshots = await getScreenshots({ limit: 10 });
+      const savedScreenshots = await getScreenshots({ limit: 2 });
       setScreenshots(savedScreenshots);
     } catch (error) {
       console.error('Error loading screenshots:', error);
@@ -64,21 +151,19 @@ export default function Popup() {
     }
   };
 
-  /**
-   * Handle messages from background script
-   */
+  // Handle messages from background script
   const handleBackgroundMessage = async (message) => {
     console.log('[POPUP] Received message:', message.type, message);
-    
+
     switch (message.type) {
       case MESSAGE_TYPES.SCREENSHOT_CAPTURED:
         await handleScreenshotCaptured(message.data);
         break;
-        
+
       case MESSAGE_TYPES.CAPTURE_ERROR:
         handleCaptureError(message.error);
         break;
-        
+
       default:
         console.warn('Unknown message type in popup:', message.type);
     }
@@ -94,19 +179,38 @@ export default function Popup() {
         clearTimeout(captureTimeout);
         setCaptureTimeout(null);
       }
-      
+
       setIsCapturing(false);
       setCaptureType(null);
-      
+
       // Save to storage
       await saveScreenshot(screenshotData);
-      
+
+      // Check settings for auto-clipboard
+      const settings = await getSettings();
+      if (settings.autoClipboard) {
+        try {
+          const blob = dataURLtoBlob(screenshotData.imageData);
+          await navigator.clipboard.write([
+            new ClipboardItem({
+              'image/png': blob
+            })
+          ]);
+          console.log('[POPUP] Screenshot automatically copied to clipboard');
+        } catch (clipboardError) {
+          console.warn('[POPUP] Failed to auto-copy to clipboard:', clipboardError);
+        }
+      }
+
       // Reload screenshots list
       await loadScreenshots();
-      
-      setSuccess(`${screenshotData.type} screenshot captured successfully!`);
+
+      const successMessage = settings.autoClipboard 
+        ? 'Screenshot captured and copied!' 
+        : 'Screenshot captured!';
+      setSuccess(successMessage);
       setTimeout(() => setSuccess(null), 3000);
-      
+
     } catch (error) {
       console.error('Error saving screenshot:', error);
       setError('Failed to save screenshot');
@@ -114,25 +218,21 @@ export default function Popup() {
     }
   };
 
-  /**
-   * Handle capture error
-   */
+  // Handle capture error
   const handleCaptureError = (errorMessage) => {
     // Clear timeout if it exists
     if (captureTimeout) {
       clearTimeout(captureTimeout);
       setCaptureTimeout(null);
     }
-    
+
     setIsCapturing(false);
     setCaptureType(null);
     setError(errorMessage || 'Capture failed');
     setTimeout(() => setError(null), 3000);
   };
 
-  /**
-   * Start capture with timeout protection
-   */
+  // Start capture with timeout protection
   const startCaptureWithTimeout = (type, messageType, timeoutMs = 30000) => {
     console.log('[POPUP] Starting capture:', type, messageType);
     setIsCapturing(true);
@@ -190,16 +290,12 @@ export default function Popup() {
     });
   };
 
-  /**
-   * Capture visible area
-   */
+  // Capture visible area
   const captureVisible = () => {
     startCaptureWithTimeout('visible', MESSAGE_TYPES.CAPTURE_VISIBLE, 10000);
   };
 
-  /**
-   * Initiate selection mode - closes popup and lets user select on page
-   */
+  // Start selection mode
   const captureSelection = async () => {
     try {
       // Get active tab first
@@ -237,9 +333,7 @@ export default function Popup() {
     }
   };
 
-  /**
-   * Delete screenshot
-   */
+  // Delete screenshot
   const handleDeleteScreenshot = async (screenshotId) => {
     try {
       await deleteScreenshot(screenshotId);
@@ -253,9 +347,25 @@ export default function Popup() {
     }
   };
 
-  /**
-   * Download screenshot
-   */
+  // Copy screenshot to clipboard
+  const copyToClipboard = async (screenshot) => {
+    try {
+      const blob = dataURLtoBlob(screenshot.imageData);
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          'image/png': blob
+        })
+      ]);
+      setSuccess('Copied to clipboard');
+      setTimeout(() => setSuccess(null), 2000);
+    } catch (error) {
+      console.error('Error copying to clipboard:', error);
+      setError('Failed to copy to clipboard');
+      setTimeout(() => setError(null), 3000);
+    }
+  };
+
+  // Download screenshot
   const downloadScreenshot = (screenshot) => {
     try {
       const link = document.createElement('a');
@@ -264,7 +374,7 @@ export default function Popup() {
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      
+
       setSuccess('Screenshot downloaded');
       setTimeout(() => setSuccess(null), 2000);
     } catch (error) {
@@ -278,142 +388,321 @@ export default function Popup() {
    * Format timestamp
    */
   const formatTimestamp = (timestamp) => {
-    return new Date(timestamp).toLocaleString();
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diff = now - date;
+
+    // Less than 1 minute
+    if (diff < 60000) return 'Just now';
+    // Less than 1 hour
+    if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
+    // Less than 24 hours
+    if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
+    // Otherwise show date
+    return date.toLocaleDateString();
   };
 
   /**
    * Truncate URL for display
    */
-  const truncateUrl = (url, maxLength = 40) => {
-    return url.length > maxLength ? url.substring(0, maxLength) + '...' : url;
+  const truncateUrl = (url, maxLength = 35) => {
+    try {
+      const urlObj = new URL(url);
+      const domain = urlObj.hostname.replace('www.', '');
+      return domain.length > maxLength ? domain.substring(0, maxLength) + '...' : domain;
+    } catch {
+      return url.length > maxLength ? url.substring(0, maxLength) + '...' : url;
+    }
   };
 
+  /**
+   * Get badge class for screenshot type
+   */
+  const getBadgeClass = (type) => {
+    switch (type) {
+      case 'visible': return 'badge badge-visible';
+      case 'full': return 'badge badge-full';
+      default: return 'badge badge-selection';
+    }
+  };
+
+  // Render gallery if in gallery view
+  if (currentView === 'gallery') {
+    return <Gallery onBack={() => setCurrentView('main')} />;
+  }
+
+  // Render settings if in settings view
+  if (currentView === 'settings') {
+    return <Settings onBack={() => setCurrentView('main')} />;
+  }
+
   return (
-    <div className="w-80 p-4 max-h-96 overflow-y-auto">
+    <div
+      className="animate-fade-in"
+      style={{
+        width: '320px',
+        padding: '16px',
+        maxHeight: '440px',
+        overflowY: 'auto',
+        backgroundColor: 'var(--color-cream-light)'
+      }}
+    >
       {/* Header */}
-      <div className="mb-4">
-        <h1 className="text-xl font-bold text-gray-800">SnapDropper</h1>
-        <p className="text-sm text-gray-600">Capture screenshots with ease</p>
+      <div style={{ marginBottom: '16px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '2px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <h1 style={{
+              fontSize: '18px',
+              fontWeight: '700',
+              color: 'var(--color-dark)',
+              margin: 0
+            }}>
+              SnapDropper
+            </h1>
+            <span style={{
+              fontSize: '10px',
+              fontWeight: '500',
+              color: 'var(--color-gray-400)',
+              backgroundColor: 'var(--color-cream)',
+              padding: '2px 6px',
+              borderRadius: '4px'
+            }}>
+              v0.0.1
+            </span>
+          </div>
+          <button
+            onClick={() => setCurrentView('settings')}
+            className="icon-btn"
+            style={{
+              padding: '8px',
+              color: 'var(--color-gray-600)',
+              backgroundColor: 'transparent',
+              border: 'none',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              transition: 'all 150ms ease'
+            }}
+            title="Settings"
+          >
+            <SettingsIcon />
+          </button>
+        </div>
+        <p style={{
+          fontSize: '13px',
+          color: 'var(--color-gray-600)',
+          margin: 0
+        }}>
+          Capture and manage screenshots
+        </p>
       </div>
 
       {/* Status Messages */}
       {error && (
-        <div className="mb-3 p-2 bg-red-100 border border-red-300 text-red-700 rounded text-sm">
+        <div className="toast toast-error animate-fade-in" style={{ marginBottom: '12px' }}>
+          <AlertIcon />
           {error}
         </div>
       )}
-      
+
       {success && (
-        <div className="mb-3 p-2 bg-green-100 border border-green-300 text-green-700 rounded text-sm">
+        <div className="toast toast-success animate-fade-in" style={{ marginBottom: '12px' }}>
+          <CheckIcon />
           {success}
         </div>
       )}
 
       {/* Capture Status */}
       {isCapturing && (
-        <div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded">
-          <div className="flex items-center space-x-2">
-            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
-            <span className="text-sm font-medium text-blue-700">
-              Capturing visible area...
-            </span>
-          </div>
+        <div className="toast toast-info animate-fade-in" style={{ marginBottom: '12px' }}>
+          <div className="spinner" />
+          <span>Capturing visible area...</span>
         </div>
       )}
 
       {/* Capture Buttons */}
-      <div className="mb-4 space-y-2">
+      <div style={{ marginBottom: '16px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
         <button
           onClick={captureVisible}
           disabled={isCapturing}
-          className={`w-full px-4 py-2 rounded font-medium transition-colors ${
-            isCapturing
-              ? 'bg-blue-400 text-white cursor-not-allowed'
-              : 'bg-blue-500 hover:bg-blue-600 text-white'
-          }`}
+          className="btn btn-primary"
+          style={{ width: '100%', padding: '14px 16px' }}
         >
+          <CameraIcon />
           {isCapturing ? 'Capturing...' : 'Capture Visible Area'}
         </button>
 
         <button
           onClick={captureSelection}
           disabled={isCapturing}
-          className="w-full px-4 py-2 rounded font-medium transition-colors bg-purple-500 hover:bg-purple-600 text-white"
+          className="btn btn-secondary"
+          style={{ width: '100%', padding: '14px 16px' }}
         >
-          Capture Selection
+          <SelectionIcon />
+          Select Area to Capture
         </button>
       </div>
 
-      {/* Screenshots Gallery */}
-      <div className="border-t pt-3">
-        <h3 className="text-sm font-medium text-gray-700 mb-2">Recent Screenshots ({screenshots.length})</h3>
-        
+      {/* Recent Screenshots */}
+      <div style={{
+        borderTop: '1.5px solid var(--color-cream-dark)',
+        paddingTop: '14px'
+      }}>
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: '10px'
+        }}>
+          <h3 style={{
+            fontSize: '13px',
+            fontWeight: '600',
+            color: 'var(--color-dark)',
+            margin: 0
+          }}>
+            Recent Screenshots
+          </h3>
+          {screenshots.length > 0 && (
+            <button
+              onClick={() => setCurrentView('gallery')}
+              className="btn-ghost"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                fontSize: '12px',
+                fontWeight: '500',
+                color: 'var(--color-orange)',
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                padding: '4px 8px',
+                borderRadius: '6px',
+                transition: 'all 150ms ease'
+              }}
+            >
+              View All
+              <ChevronRightIcon />
+            </button>
+          )}
+        </div>
+
         {screenshots.length === 0 ? (
-          <p className="text-xs text-gray-500 text-center py-4">No screenshots yet. Capture your first one!</p>
+          <div className="empty-state" style={{ padding: '24px 16px' }}>
+            <ImageIcon />
+            <p className="empty-state-text">
+              No screenshots yet.<br />
+              Capture your first one!
+            </p>
+          </div>
         ) : (
-          <div className="space-y-2 max-h-48 overflow-y-auto">
-            {screenshots.map((screenshot) => (
-              <div
-                key={screenshot.id}
-                className="flex items-center space-x-2 p-2 border rounded hover:bg-gray-50"
-              >
-                {/* Thumbnail */}
-                <div className="flex-shrink-0">
-                  <img
-                    src={screenshot.imageData}
-                    alt={`Screenshot from ${screenshot.url}`}
-                    className="w-12 h-8 object-cover border rounded"
-                  />
-                </div>
-                
-                {/* Info */}
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-medium text-gray-700 truncate">
-                    {screenshot.title || 'Untitled'}
-                  </p>
-                  <p className="text-xs text-gray-500 truncate">
-                    {truncateUrl(screenshot.url)}
-                  </p>
-                  <div className="flex items-center space-x-2 text-xs text-gray-400">
-                    <span className={`px-1 rounded ${
-                      screenshot.type === 'visible' ? 'bg-blue-100 text-blue-600' :
-                      screenshot.type === 'full' ? 'bg-green-100 text-green-600' :
-                      'bg-purple-100 text-purple-600'
-                    }`}>
-                      {screenshot.type}
-                    </span>
-                    <span>{formatTimestamp(screenshot.timestamp)}</span>
+          <>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {screenshots.map((screenshot) => (
+                <div
+                  key={screenshot.id}
+                  className="card animate-slide-in"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px',
+                    padding: '10px'
+                  }}
+                >
+                  {/* Thumbnail */}
+                  <div style={{ flexShrink: 0 }}>
+                    <img
+                      src={screenshot.imageData}
+                      alt={`Screenshot from ${screenshot.url}`}
+                      className="thumbnail"
+                      style={{
+                        width: '48px',
+                        height: '36px'
+                      }}
+                    />
+                  </div>
+
+                  {/* Info */}
+                  <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
+                    <p style={{
+                      fontSize: '12px',
+                      fontWeight: '500',
+                      color: 'var(--color-dark)',
+                      margin: '0 0 2px 0',
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis'
+                    }}>
+                      {truncateUrl(screenshot.url)}
+                    </p>
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px'
+                    }}>
+                      <span className={getBadgeClass(screenshot.type)}>
+                        {screenshot.type}
+                      </span>
+                      <span style={{
+                        fontSize: '11px',
+                        color: 'var(--color-gray-400)'
+                      }}>
+                        {formatTimestamp(screenshot.timestamp)}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Actions */}
+                  <div style={{
+                    display: 'flex',
+                    flexShrink: 0,
+                    gap: '2px'
+                  }}>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); copyToClipboard(screenshot); }}
+                      className="icon-btn icon-btn-success"
+                      title="Copy to clipboard"
+                    >
+                      <CopyIcon />
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); downloadScreenshot(screenshot); }}
+                      className="icon-btn icon-btn-primary"
+                      title="Download"
+                    >
+                      <DownloadIcon />
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleDeleteScreenshot(screenshot.id); }}
+                      className="icon-btn icon-btn-danger"
+                      title="Delete"
+                    >
+                      <TrashIcon />
+                    </button>
                   </div>
                 </div>
-                
-                {/* Actions */}
-                <div className="flex-shrink-0 flex space-x-1">
-                  <button
-                    onClick={() => downloadScreenshot(screenshot)}
-                    className="p-1 text-gray-400 hover:text-blue-500"
-                    title="Download"
-                  >
-                    ⬇️
-                  </button>
-                  <button
-                    onClick={() => handleDeleteScreenshot(screenshot.id)}
-                    className="p-1 text-gray-400 hover:text-red-500"
-                    title="Delete"
-                  >
-                    🗑️
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+              ))}
+            </div>
 
-      {/* Footer */}
-      <div className="mt-3 pt-2 border-t text-center">
-        <p className="text-xs text-gray-400">
-          SnapDropper v0.0.1
-        </p>
+            {screenshots.length >= 2 && (
+              <button
+                onClick={() => setCurrentView('gallery')}
+                className="btn btn-ghost"
+                style={{
+                  width: '100%',
+                  marginTop: '10px',
+                  padding: '10px',
+                  fontSize: '13px',
+                  color: 'var(--color-gray-600)'
+                }}
+              >
+                View All Screenshots
+              </button>
+            )}
+          </>
+        )}
       </div>
     </div>
   );
