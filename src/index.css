@@ -1,14 +1,5 @@
 @import "tailwindcss";
 
-/* SnapDropper Design System */
-/* Color Palette:
-   - Cream Light: #FAF3E1 (background)
-   - Cream: #F5E7C6 (secondary/cards)
-   - Orange: #FF6D1F (primary accent)
-   - Dark: #222222 (text)
-   - Neutral variants for readability
-*/
-
 :root {
   /* Primary Colors */
   --color-cream-light: #FAF3E1;

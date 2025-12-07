@@ -89,9 +89,7 @@ export default function Gallery({ onBack }) {
     loadAllScreenshots();
   }, []);
 
-  /**
-   * Load all screenshots from storage
-   */
+  // Load all screenshots from storage
   const loadAllScreenshots = async () => {
     try {
       setLoading(true);
@@ -105,9 +103,7 @@ export default function Gallery({ onBack }) {
     }
   };
 
-  /**
-   * Copy screenshot to clipboard
-   */
+  // Copy screenshot to clipboard
   const copyToClipboard = async (screenshot) => {
     try {
       const blob = dataURLtoBlob(screenshot.imageData);
@@ -125,9 +121,7 @@ export default function Gallery({ onBack }) {
     }
   };
 
-  /**
-   * Download screenshot
-   */
+  // Download screenshot
   const downloadScreenshot = (screenshot) => {
     try {
       const link = document.createElement('a');
@@ -146,9 +140,7 @@ export default function Gallery({ onBack }) {
     }
   };
 
-  /**
-   * Delete screenshot
-   */
+  // Delete screenshot
   const handleDeleteScreenshot = async (screenshotId) => {
     try {
       await deleteScreenshot(screenshotId);
@@ -162,9 +154,7 @@ export default function Gallery({ onBack }) {
     }
   };
 
-  /**
-   * Format timestamp
-   */
+  // Format timestamp for display
   const formatTimestamp = (timestamp) => {
     const date = new Date(timestamp);
     const now = new Date();
@@ -180,9 +170,7 @@ export default function Gallery({ onBack }) {
     return date.toLocaleDateString();
   };
 
-  /**
-   * Truncate URL for display
-   */
+  // Truncate URL for display
   const truncateUrl = (url, maxLength = 30) => {
     try {
       const urlObj = new URL(url);
@@ -193,9 +181,7 @@ export default function Gallery({ onBack }) {
     }
   };
 
-  /**
-   * Get badge class for screenshot type
-   */
+  // Get badge class for screenshot type
   const getBadgeClass = (type) => {
     switch (type) {
       case 'visible': return 'badge badge-visible';

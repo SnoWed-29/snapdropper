@@ -1,7 +1,4 @@
-/**
- * Storage utilities for SnapDropper screenshots
- * Uses chrome.storage.local which is shared across all extension contexts
- */
+// Storage utilities for screenshots and settings using chrome.storage.local
 
 const STORAGE_KEY = 'screenshots';
 const SETTINGS_KEY = 'settings';
@@ -14,9 +11,7 @@ const DEFAULT_SETTINGS = {
   maxImages: 50 // Will be calculated based on storage quota
 };
 
-/**
- * Save a screenshot to storage
- */
+// Save screenshot to storage
 async function saveScreenshot(screenshotData) {
   try {
     // Get existing screenshots and settings
@@ -52,9 +47,7 @@ async function saveScreenshot(screenshotData) {
   }
 }
 
-/**
- * Get all screenshots from storage
- */
+// Get all screenshots from storage
 async function getScreenshots(options = {}) {
   try {
     const result = await chrome.storage.local.get(STORAGE_KEY);
@@ -77,9 +70,7 @@ async function getScreenshots(options = {}) {
   }
 }
 
-/**
- * Delete a screenshot by ID
- */
+// Delete screenshot by ID
 async function deleteScreenshot(id) {
   try {
     const result = await chrome.storage.local.get(STORAGE_KEY);
@@ -95,9 +86,7 @@ async function deleteScreenshot(id) {
   }
 }
 
-/**
- * Get screenshot by ID
- */
+// Get screenshot by ID
 async function getScreenshotById(id) {
   try {
     const result = await chrome.storage.local.get(STORAGE_KEY);
@@ -110,9 +99,7 @@ async function getScreenshotById(id) {
   }
 }
 
-/**
- * Clear all screenshots
- */
+// Clear all screenshots
 async function clearAllScreenshots() {
   try {
     await chrome.storage.local.set({ [STORAGE_KEY]: [] });
@@ -123,9 +110,7 @@ async function clearAllScreenshots() {
   }
 }
 
-/**
- * Get settings from storage
- */
+// Get user settings
 async function getSettings() {
   try {
     const result = await chrome.storage.local.get(SETTINGS_KEY);
@@ -136,9 +121,7 @@ async function getSettings() {
   }
 }
 
-/**
- * Save settings to storage
- */
+// Save user settings
 async function saveSettings(settings) {
   try {
     const currentSettings = await getSettings();
@@ -152,9 +135,7 @@ async function saveSettings(settings) {
   }
 }
 
-/**
- * Calculate maximum storage capacity for images
- */
+// Calculate max storage capacity for images
 async function calculateMaxStorageCapacity() {
   try {
     const quota = await chrome.storage.local.getBytesInUse();

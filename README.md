@@ -26,11 +26,6 @@ A Chrome browser extension for screenshot capture with Windows Snipping Tool-sty
 - **Dynamic Storage** - Smart storage capacity calculation
 - **Persistent Settings** - Preferences saved across browser sessions
 
-### Design
-- **Modern UI** - Clean interface with Tailwind CSS v4
-- **Color Scheme** - Cream Light (#FAF3E1), Orange (#FF6D1F), Dark (#222222)
-- **Responsive** - Optimized for extension popup constraints
-
 ## Installation
 
 1. Clone or download this repository

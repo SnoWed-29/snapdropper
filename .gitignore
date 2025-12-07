@@ -22,7 +22,3 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
-.github/
-.claude/
-CLAUDE.md
-TECHNICAL_DOCUMENTATION.md

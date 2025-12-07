@@ -3,11 +3,7 @@ import { saveScreenshot, getScreenshots, deleteScreenshot, getSettings } from ".
 import Gallery from "./Gallery.jsx";
 import Settings from "./Settings.jsx";
 
-/**
- * Convert a Data URL to a Blob
- * @param {string} dataURL - The data URL to convert
- * @returns {Blob} - The resulting Blob object
- */
+// Convert base64 data URL to Blob
 function dataURLtoBlob(dataURL) {
   const parts = dataURL.split(',');
   const mime = parts[0].match(/:(.*?);/)[1];
@@ -144,9 +140,7 @@ export default function Popup() {
     };
   }, []);
 
-  /**
-   * Load screenshots from storage (only last 2 for main view)
-   */
+  // Load screenshots from storage (only last 2 for main view)
   const loadScreenshots = async () => {
     try {
       const savedScreenshots = await getScreenshots({ limit: 2 });
@@ -157,9 +151,7 @@ export default function Popup() {
     }
   };
 
-  /**
-   * Handle messages from background script
-   */
+  // Handle messages from background script
   const handleBackgroundMessage = async (message) => {
     console.log('[POPUP] Received message:', message.type, message);
 
@@ -226,9 +218,7 @@ export default function Popup() {
     }
   };
 
-  /**
-   * Handle capture error
-   */
+  // Handle capture error
   const handleCaptureError = (errorMessage) => {
     // Clear timeout if it exists
     if (captureTimeout) {
@@ -242,9 +232,7 @@ export default function Popup() {
     setTimeout(() => setError(null), 3000);
   };
 
-  /**
-   * Start capture with timeout protection
-   */
+  // Start capture with timeout protection
   const startCaptureWithTimeout = (type, messageType, timeoutMs = 30000) => {
     console.log('[POPUP] Starting capture:', type, messageType);
     setIsCapturing(true);
@@ -302,16 +290,12 @@ export default function Popup() {
     });
   };
 
-  /**
-   * Capture visible area
-   */
+  // Capture visible area
   const captureVisible = () => {
     startCaptureWithTimeout('visible', MESSAGE_TYPES.CAPTURE_VISIBLE, 10000);
   };
 
-  /**
-   * Initiate selection mode - closes popup and lets user select on page
-   */
+  // Start selection mode
   const captureSelection = async () => {
     try {
       // Get active tab first
@@ -349,9 +333,7 @@ export default function Popup() {
     }
   };
 
-  /**
-   * Delete screenshot
-   */
+  // Delete screenshot
   const handleDeleteScreenshot = async (screenshotId) => {
     try {
       await deleteScreenshot(screenshotId);
@@ -365,9 +347,7 @@ export default function Popup() {
     }
   };
 
-  /**
-   * Copy screenshot to clipboard
-   */
+  // Copy screenshot to clipboard
   const copyToClipboard = async (screenshot) => {
     try {
       const blob = dataURLtoBlob(screenshot.imageData);
@@ -385,9 +365,7 @@ export default function Popup() {
     }
   };
 
-  /**
-   * Download screenshot
-   */
+  // Download screenshot
   const downloadScreenshot = (screenshot) => {
     try {
       const link = document.createElement('a');

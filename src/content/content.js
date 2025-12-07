@@ -1,14 +1,3 @@
-/**
- * SnapDropper Content Script
- * Selection capture like Windows Snipping Tool
- *
- * Design System Colors:
- * - Cream Light: #FAF3E1
- * - Cream: #F5E7C6
- * - Orange: #FF6D1F
- * - Dark: #222222
- */
-
 console.log("[CONTENT] SnapDropper loaded");
 
 const MESSAGE_TYPES = {
@@ -29,9 +18,7 @@ const DEFAULT_SETTINGS = {
   maxImages: 50
 };
 
-/**
- * Get settings from storage
- */
+// Get settings from chrome storage
 async function getSettings() {
   try {
     const result = await chrome.storage.local.get(SETTINGS_KEY);
@@ -42,9 +29,7 @@ async function getSettings() {
   }
 }
 
-/**
- * Convert a Data URL to a Blob
- */
+// Convert base64 data URL to Blob
 function dataURLtoBlob(dataURL) {
   const parts = dataURL.split(',');
   const mime = parts[0].match(/:(.*?);/)[1];
@@ -59,9 +44,7 @@ function dataURLtoBlob(dataURL) {
   return new Blob([uint8Array], { type: mime });
 }
 
-/**
- * Copy image to clipboard
- */
+// Copy image to clipboard
 async function copyToClipboard(imageData) {
   try {
     const blob = dataURLtoBlob(imageData);
@@ -90,9 +73,7 @@ const COLORS = {
   error: '#ef4444'
 };
 
-/**
- * Save screenshot using chrome.storage.local (shared across extension)
- */
+// Save screenshot to chrome.storage.local
 async function saveScreenshot(screenshotData) {
   try {
     // Get existing screenshots and settings
@@ -128,9 +109,6 @@ async function saveScreenshot(screenshotData) {
   }
 }
 
-/**
- * Selection overlay - Windows Snipping Tool style with modern design
- */
 class SnippingTool {
   constructor() {
     this.overlay = null;
@@ -154,8 +132,8 @@ class SnippingTool {
     this.addListeners();
   }
 
+  // Create fullscreen overlay for selection
   createOverlay() {
-    // Create full-screen overlay
     this.overlay = document.createElement('div');
     this.overlay.id = 'snapdropper-snip';
     this.overlay.style.cssText = `
@@ -168,7 +146,6 @@ class SnippingTool {
       cursor: crosshair;
     `;
 
-    // Create canvas for drawing selection
     this.canvas = document.createElement('canvas');
     this.canvas.width = window.innerWidth;
     this.canvas.height = window.innerHeight;
@@ -183,7 +160,6 @@ class SnippingTool {
     this.ctx = this.canvas.getContext('2d');
     this.drawDimmedScreen();
 
-    // Instructions tooltip with modern design
     const tooltip = document.createElement('div');
     tooltip.id = 'snapdropper-tooltip';
     tooltip.style.cssText = `
@@ -256,12 +232,14 @@ class SnippingTool {
     document.body.appendChild(this.overlay);
   }
 
+  // Draw semi-transparent dark overlay
   drawDimmedScreen() {
     // Fill with semi-transparent dark overlay
     this.ctx.fillStyle = 'rgba(34, 34, 34, 0.5)';
     this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
   }
 
+  // Draw selection rectangle with handles
   drawSelection() {
     const x = Math.min(this.startX, this.endX);
     const y = Math.min(this.startY, this.endY);
@@ -330,6 +308,7 @@ class SnippingTool {
     if (tooltip) tooltip.style.display = 'none';
   }
 
+  // Add mouse and keyboard event listeners
   addListeners() {
     this.overlay.addEventListener('mousedown', this.boundMouseDown);
     this.overlay.addEventListener('mousemove', this.boundMouseMove);
@@ -338,6 +317,7 @@ class SnippingTool {
     this.overlay.addEventListener('contextmenu', e => e.preventDefault());
   }
 
+  // Remove all event listeners
   removeListeners() {
     if (this.overlay) {
       this.overlay.removeEventListener('mousedown', this.boundMouseDown);
@@ -347,6 +327,7 @@ class SnippingTool {
     document.removeEventListener('keydown', this.boundKeyDown);
   }
 
+  // Start selection on mouse down
   onMouseDown(e) {
     this.isSelecting = true;
     this.startX = e.clientX;
@@ -355,6 +336,7 @@ class SnippingTool {
     this.endY = e.clientY;
   }
 
+  // Update selection while dragging
   onMouseMove(e) {
     if (!this.isSelecting) return;
     this.endX = e.clientX;
@@ -362,6 +344,7 @@ class SnippingTool {
     this.drawSelection();
   }
 
+  // Finish selection and capture
   onMouseUp(e) {
     if (!this.isSelecting) return;
     this.isSelecting = false;
@@ -437,6 +420,7 @@ class SnippingTool {
     }, 100);
   }
 
+  // Handle ESC key to cancel
   onKeyDown(e) {
     if (e.key === 'Escape') {
       console.log('[CONTENT] Selection canceled');
@@ -444,6 +428,7 @@ class SnippingTool {
     }
   }
 
+  // Show success notification
   showSuccessToast(copiedToClipboard = false) {
     const toast = document.createElement('div');
     toast.style.cssText = `
@@ -505,6 +490,7 @@ class SnippingTool {
     }, 2000);
   }
 
+  // Show error notification
   showErrorToast(message) {
     const toast = document.createElement('div');
     toast.style.cssText = `
@@ -568,6 +554,7 @@ class SnippingTool {
     }, 3000);
   }
 
+  // Remove overlay and cleanup
   cleanup() {
     this.removeListeners();
     if (this.overlay && this.overlay.parentNode) {
